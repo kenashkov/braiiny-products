@@ -36,17 +36,22 @@ class Product extends BaseActiveRecord implements ProductInterface
     use ProductTrait;
 
     protected const CONFIG_DEFAULTS = [
-        'main_table'            => 'products',
-        'route'                 => '/admin/products',//this will use the ActiveRecordDefaultController for the CRUD operations
+        'main_table'                            => 'products',
+        'route'                                 => '/admin/products',//this will use the ActiveRecordDefaultController for the CRUD operations
         //no dedicated controller is provided but thew generic one form Guzaba 2 is used
-        'services'              => [ //from the DI
+
+        'default_billy_organization_id'         => 'cwNMzNn1TOWhrYwyb6jdfA',//to be used if none is provided
+        'default_billy_account_id'              => '4qAjMzZRRoO7sOAjzkorjw',
+        'default_billy_sales_tax_ruleset_id'    => 'K5A89XDhQJeiyC9HtTX6Hw',
+
+        'services'                              => [ //from the DI
             'Billy',
             'LockManager',
         ],
-        'validation'                => [
-            'product_name'                 => [
-                'required'              => true,
-                'max_length'            => 200,
+        'validation'                            => [
+            'product_name'                          => [
+                'required'                              => true,
+                'max_length'                            => 200,
             ],
             //more validations can be added here
         ],
@@ -93,6 +98,16 @@ class Product extends BaseActiveRecord implements ProductInterface
      */
     protected function _before_write(): void
     {
+        //set some defaults if not set
+        if (!$this->product_billy_organization_id) {
+            $this->product_billy_organization_id = self::CONFIG_RUNTIME['default_billy_organization_id'];
+        }
+        if (!$this->product_billy_account_id) {
+            $this->product_billy_account_id = self::CONFIG_RUNTIME['default_billy_account_id'];
+        }
+        if (!$this->product_billy_sales_tax_ruleset_id) {
+            $this->product_billy_sales_tax_ruleset_id = self::CONFIG_RUNTIME['default_billy_sales_tax_ruleset_id'];
+        }
 
         $this->validate();//means there is no other product with the same name meaning that the transaction is expected to succeed (we already have a lock)
 
@@ -100,6 +115,9 @@ class Product extends BaseActiveRecord implements ProductInterface
         $Billy = self::get_service('Billy');
         //if the below line does not throw an exception the product creation will continue
         $Response = $Billy->update_product($this);
+        if ($this->is_new()) {
+            $this->product_billy_id = $Response->products[0]->id;
+        }
 
     }
 
@@ -186,7 +204,7 @@ class Product extends BaseActiveRecord implements ProductInterface
 
     public function get_billy_is_archived(): bool
     {
-        return $this->product_is_archived;
+        return (bool) $this->product_is_archived;
     }
 
 
