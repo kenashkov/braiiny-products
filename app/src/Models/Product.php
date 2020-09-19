@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Kenashkov\Braiiny\Products\Models;
 
+use Azonmedia\Lock\Interfaces\LockInterface;
+use Azonmedia\Lock\Interfaces\LockManagerInterface;
 use Guzaba2\Authorization\Exceptions\PermissionDeniedException;
 use Guzaba2\Orm\Exceptions\RecordNotFoundException;
+use Guzaba2\Orm\Interfaces\ActiveRecordInterface;
 use Guzaba2\Orm\Interfaces\ValidationFailedExceptionInterface;
 use GuzabaPlatform\Platform\Application\BaseActiveRecord;
 use Kenashkov\BillyDk\Interfaces\ProductInterface;
@@ -34,41 +37,106 @@ class Product extends BaseActiveRecord implements ProductInterface
 
     protected const CONFIG_DEFAULTS = [
         'main_table'            => 'products',
-        'route'                 => '/admin/products',
+        'route'                 => '/admin/products',//this will use the ActiveRecordDefaultController for the CRUD operations
+        //no dedicated controller is provided but thew generic one form Guzaba 2 is used
         'services'              => [ //from the DI
-            'Billy'
+            'Billy',
+            'LockManager',
         ],
         'validation'                => [
             'product_name'                 => [
                 'required'              => true,
                 'max_length'            => 200,
             ],
+            //more validations can be added here
         ],
     ];
 
     protected const CONFIG_RUNTIME = [];
 
+    /**
+     * Enforces unique product name (product_name)
+     * The hook is called by parent::validate()
+     * @return ValidationFailedExceptionInterface|null
+     * @throws \Azonmedia\Exceptions\InvalidArgumentException
+     * @throws \Guzaba2\Base\Exceptions\InvalidArgumentException
+     * @throws \Guzaba2\Base\Exceptions\LogicException
+     * @throws \Guzaba2\Base\Exceptions\RunTimeException
+     * @throws \Guzaba2\Coroutine\Exceptions\ContextDestroyedException
+     * @throws \Guzaba2\Kernel\Exceptions\ConfigurationException
+     * @throws \ReflectionException
+     */
     protected function _validate_proruct_name(): ?ValidationFailedExceptionInterface
     {
-        try {
-            $AnotherProduct = new static( ['product_name' => $this->product_name] );
-            return new ValidationFailedException($this, 'product_name', sprintf(t::_('There is already a product with the given product_name "%1$s".'), $this->product_name));
-        } catch (RecordNotFoundException $Exception) {
-            //it is OK... there is no other product with this name
-        } catch (PermissionDeniedException $Exception) {
-            return new ValidationFailedException($this, 'product_name', sprintf(t::_('There is already a product with the given product_name "%1$s".'), $this->product_name));
+        $ret = null;
+        if ($this->is_new() || $this->is_property_modified('product_name')) {
+            try {
+                $AnotherProduct = new static(['product_name' => $this->product_name]);
+                $ret = new ValidationFailedException($this, 'product_name', sprintf(t::_('There is already a product with the given product_name "%1$s".'), $this->product_name));
+            } catch (RecordNotFoundException $Exception) {
+                //it is OK... there is no other product with this name
+            } catch (PermissionDeniedException $Exception) {
+                $ret = new ValidationFailedException($this, 'product_name', sprintf(t::_('There is already a product with the given product_name "%1$s".'), $this->product_name));
+            }
         }
+        return $ret;
     }
 
+    //more validation hooks like _validate_product_number() etc can be added here
+
+    /**
+     * will be executed by parent::write()
+     * @throws \Guzaba2\Base\Exceptions\InvalidArgumentException
+     * @throws \Guzaba2\Base\Exceptions\RunTimeException
+     * @throws \Guzaba2\Orm\Exceptions\MultipleValidationFailedException
+     * @throws \ReflectionException
+     */
     protected function _before_write(): void
     {
 
-        $this->validate();
+        $this->validate();//means there is no other product with the same name meaning that the transaction is expected to succeed (we already have a lock)
 
         /** @var BillyDk $Billy */
         $Billy = self::get_service('Billy');
-
+        //if the below line does not throw an exception the product creation will continue
         $Response = $Billy->update_product($this);
+
+    }
+
+    /**
+     * It is needed to override the parent method in order to add an exclusive lock around the writing process.
+     * The execution sequence is as follows:
+     * 1. $this->write()
+     * 2. acquire_lock()
+     * 3. parent::write()
+     * 4. $this->_before_write()
+     * 5. validate()
+     * 6. update_product() to Billy API
+     * 7. the actual writing in DB occurs in parnet::write()
+     * 8. _after_write() (not used)
+     * 9. release lock (implicitly at the end of scope of $this->write())
+     * @overrides
+     * @return ActiveRecordInterface
+     */
+    public function write(): ActiveRecordInterface
+    {
+        //to guarantee that there is no record inserted between the validate() and the creation of the product at Billy (@see _before_write())
+        //locking can be added here
+        //otherwise it may happen the product to be added at Billy but to fail to be added here because there is already one with the same name (race condition)
+        /** @var LockManagerInterface $LockManager */
+        $LockManager = self::get_service('LockManager');
+        //the acquire_lock method injects in the parent scope (by ref) a ScopeReference instance
+        //the code execution will block at the acquire_lock line if there is another thread holding this lock
+        //and when the other thread is finished the $this->validate() fail as there will already be an existing record with this product name
+        $LockManager->acquire_lock('product:'.$this->product_name, LockInterface::LOCK_EX, $LOCK_REF);
+
+
+        $ret = parent::write();//this will also execute _before_write() and _after_write() hooks and all that within one transaction
+
+        //at the end of the scope the lock will be released automatically by the destructor of ScopeReference $LOCK_REF
+        //no need of explicit release_lock() or unset($LOCK_REF)
+
+        return $ret;
     }
 
     /**
