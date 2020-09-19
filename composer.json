@@ -1,6 +1,6 @@
 {
     "name": "kenashkov/braiiny-products",
-    "type": "library",
+    "type": "guzaba-platform-component",
     "description": "Products",
     "keywords": ["Products"],
     "homepage": "https://github.com/kenashkov/braiiny-products",
