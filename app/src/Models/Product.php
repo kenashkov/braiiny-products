@@ -118,7 +118,23 @@ class Product extends BaseActiveRecord implements ProductInterface
         if ($this->is_new()) {
             $this->product_billy_id = $Response->products[0]->id;
         }
+    }
 
+    protected function _before_delete(): void
+    {
+
+        //TODO - validation of forreign keys pointing to this object are to be added here
+        //first all such objects should be removed (or their FK keys changed) and only when it is ensured
+        //that the deletion can complete successfully in the local DB delete at Billy
+        //and then delete in the local DB
+        //it is important to note that delete() invokes _before_delete() and _after_delete() and all these are in a
+        //transaction, meaning that if the deletion at Billy fails the transaction will be rolled back and none of
+        //the objects with FK to this one will be actually deleted (or updated)
+
+        /** @var BillyDk $Billy */
+        $Billy = self::get_service('Billy');
+        //if the below line does not throw an exception the product deletion will continue
+        $Response = $Billy->delete_product($this);
     }
 
     /**
