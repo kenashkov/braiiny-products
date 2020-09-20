@@ -32,6 +32,11 @@ class Products extends Base
         $Erp = self::get_service(ErpInterface::class);
         $page = 1;
         $page_size = self::CONFIG_RUNTIME['import_batch_size'];
+
+        $erp_products = $Erp->get_products();
+        print_r($erp_products);
+        return 0;
+
         $imported_products = 0;
         do {
             $erp_products = $Erp->get_products($page, $page_size);
@@ -51,6 +56,7 @@ class Products extends Base
                     $Product = new Product( ['product_erp_id' => $ErpProduct->get_erp_id()] );
                 } catch (RecordNotFoundException $Exception) {
                     $Product = new Product();
+                    $Product->disable_erp_integration();
                     foreach ($Product::METHOD_PROPERTY_MAP as $method => $property) {
                         $Product->{$property} = $ErpProduct->{$method}();
                     }
@@ -60,6 +66,7 @@ class Products extends Base
                     //$Product->product_description = $ErpProduct->get_erp_description();
                     //...
                     $Product->write();
+                    $Product->enable_erp_integration();
                     $imported_products++;
                 } //the permissions are not enforced in this app
             }

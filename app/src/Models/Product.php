@@ -77,6 +77,38 @@ class Product extends BaseActiveRecord implements ProductInterface
     ];
 
     /**
+     * Allows the integration with the ERP to be disabled.
+     * This is useful when importing products - avoid updating/pushing back the products to the ERP (like a recursion)
+     * @var bool
+     */
+    private bool $erp_integration_enabled = true;
+
+    /**
+     * Disable ERP integration (on write & delete)
+     */
+    public function disable_erp_integration(): void
+    {
+        $this->erp_integration_enabled = true;
+    }
+
+    /**
+     * Enable the ERP integration (on write & delete)
+     */
+    public function enable_erp_integration(): void
+    {
+        $this->erp_integration_enabled = false;
+    }
+
+    /**
+     * Returns is the ERP integration enabled (for write & delete)
+     * @return bool
+     */
+    public function is_erp_integration_enabled(): bool
+    {
+        return $this->erp_integration_enabled;
+    }
+
+    /**
      * Enforces unique product name (product_name)
      * The hook is called by parent::validate()
      * @return ValidationFailedExceptionInterface|null
@@ -126,14 +158,19 @@ class Product extends BaseActiveRecord implements ProductInterface
             $this->product_erp_sales_tax_ruleset_id = self::CONFIG_RUNTIME['default_erp_sales_tax_ruleset_id'];
         }
 
-        $this->validate();//means there is no other product with the same name meaning that the transaction is expected to succeed (we already have a lock)
+        //no need to invoke validate() explicitly if there will be no push to the ERP as this will be invoked internally by write()
+        if ($this->is_erp_integration_enabled()) {
+            //explicit earler call to validate() before the default call inside write()
+            //to ensure there is no other product with the same name meaning that the transaction is expected to succeed (we already have a lock)
+            $this->validate();
 
-        /** @var ErpInterface $Erp */
-        $Erp = self::get_service(ErpInterface::class);
-        //if the below line does not throw an exception the product creation will continue
-        $erp_id = $Erp->update_product($this);
-        if ($this->is_new()) {
-            $this->product_erp_id = $erp_id;
+            /** @var ErpInterface $Erp */
+            $Erp = self::get_service(ErpInterface::class);
+            //if the below line does not throw an exception the product creation will continue
+            $erp_id = $Erp->update_product($this);
+            if ($this->is_new()) {
+                $this->product_erp_id = $erp_id;
+            }
         }
     }
 
@@ -148,10 +185,12 @@ class Product extends BaseActiveRecord implements ProductInterface
         //transaction, meaning that if the deletion at ERP fails the transaction will be rolled back and none of
         //the objects with FK to this one will be actually deleted (or updated)
 
-        /** @var ErpInterface $Erp */
-        $Erp = self::get_service(ErpInterface::class);
-        //if the below line does not throw an exception the product deletion will continue
-        $Erp->delete_product($this);
+        if ($this->is_erp_integration_enabled()) {
+            /** @var ErpInterface $Erp */
+            $Erp = self::get_service(ErpInterface::class);
+            //if the below line does not throw an exception the product deletion will continue
+            $Erp->delete_product($this);
+        }
     }
 
     /**
