@@ -20,7 +20,7 @@ class Products extends BaseController
                 Method::HTTP_POST                       => [self::class, 'export_to_erp']
             ],
             '/admin/products/import-from-erp'     => [
-                Method::HTTP_GET                       => [self::class, 'import_from_erp']
+                Method::HTTP_POST                       => [self::class, 'import_from_erp']
             ],
         ]
     ];
@@ -48,6 +48,12 @@ class Products extends BaseController
      */
     public function import_from_erp(): ResponseInterface
     {
-        \Kenashkov\Braiiny\Products\Models\Products::import_from_erp();
+        $imported_products = \Kenashkov\Braiiny\Products\Models\Products::import_from_erp();
+
+        $struct = [
+            'imported_products' => $imported_products,
+            'message'           => sprintf(t::_('%1$s products were imported from the ERP.'), $imported_products),
+        ];
+        return self::get_structured_ok_response($struct);
     }
 }

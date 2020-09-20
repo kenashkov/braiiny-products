@@ -62,6 +62,21 @@ class Product extends BaseActiveRecord implements ProductInterface
     protected const CONFIG_RUNTIME = [];
 
     /**
+     * A mapping between the methods ofthe object and the corresponding properties of this object.
+     */
+    public const METHOD_PROPERTY_MAP = [
+        'get_erp_id'                          => 'product_erp_id',
+        'get_erp_organization'                => 'product_erp_organization_id',
+        'get_erp_name'                        => 'product_name',
+        'get_erp_description'                 => 'product_description',
+        'get_erp_account'                     => 'product_erp_account_id',
+        'get_erp_product_number'              => 'product_number',
+        'get_erp_suppliers_product_number'    => 'product_suppliers_number',
+        'get_erp_sales_tax_ruleset'           => 'product_erp_sales_tax_ruleset_id',
+        'get_erp_is_archived'                 => 'product_is_archived',
+    ];
+
+    /**
      * Enforces unique product name (product_name)
      * The hook is called by parent::validate()
      * @return ValidationFailedExceptionInterface|null
@@ -164,7 +179,9 @@ class Product extends BaseActiveRecord implements ProductInterface
         //the acquire_lock method injects in the parent scope (by ref) a ScopeReference instance
         //the code execution will block at the acquire_lock line if there is another thread holding this lock
         //and when the other thread is finished the $this->validate() fail as there will already be an existing record with this product name
-        $LockManager->acquire_lock('product:'.$this->product_name, LockInterface::LOCK_EX, $LOCK_REF);
+        //$LockManager->acquire_lock('product:'.$this->product_name, LockInterface::LOCK_EX, $LOCK_REF);
+        //the product name may be too long for a lock key so lets md5() it
+        $LockManager->acquire_lock('product:'.md5($this->product_name), LockInterface::LOCK_EX, $LOCK_REF);
 
 
         $ret = parent::write();//this will also execute _before_write() and _after_write() hooks and all that within one transaction
@@ -181,7 +198,8 @@ class Product extends BaseActiveRecord implements ProductInterface
      */
     public function get_erp_id(): string
     {
-       return $this->product_erp_id;
+        //return $this->{self::METHOD_PROPERTY_MAP[__FUNCTION__]};//alternative
+        return $this->product_erp_id;
     }
 
 
