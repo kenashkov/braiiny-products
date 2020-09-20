@@ -14,6 +14,8 @@ use GuzabaPlatform\Platform\Application\BaseActiveRecord;
 use Kenashkov\BillyDk\Interfaces\ProductInterface;
 use Kenashkov\BillyDk\Traits\ProductTrait;
 use Kenashkov\ErpApi\Interfaces\ErpInterface;
+use Kenashkov\ErpApi\Interfaces\ErpExceptionInterface;
+use Kenashkov\ErpApi\Interfaces\ErpNotFoundExceptionInterface;
 
 /**
  * Class Product
@@ -166,9 +168,22 @@ class Product extends BaseActiveRecord implements ProductInterface
 
             /** @var ErpInterface $Erp */
             $Erp = self::get_service(ErpInterface::class);
+
+            //first we need to check if this is an existing product - it may have been deleted at the ERP
+            //and the update will fail
+            if ($this->product_erp_id) {
+                try {
+                    $ErpProduct = $Erp->get_product($this);
+                } catch (ErpNotFoundExceptionInterface $Exception) {
+                    //product is gone...
+                    //remove the product_erp_id so that it appears like a new product is being submitted to the ERP
+                    $this->product_erp_id = '';
+                }
+            }
+
             //if the below line does not throw an exception the product creation will continue
             $erp_id = $Erp->update_product($this);
-            if ($this->is_new()) {
+            if (!$this->product_erp_id) { //new ones dont have it and also products that have been deleted at the ERP but still exist here (see above)
                 $this->product_erp_id = $erp_id;
             }
         }
