@@ -33,10 +33,6 @@ class Products extends Base
         $page = 1;
         $page_size = self::CONFIG_RUNTIME['import_batch_size'];
 
-        $erp_products = $Erp->get_products();
-        print_r($erp_products);
-        return 0;
-
         $imported_products = 0;
         do {
             $erp_products = $Erp->get_products($page, $page_size);
