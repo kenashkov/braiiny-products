@@ -41,9 +41,8 @@ class Products extends BaseController
     }
 
     /**
-     * Retrieves all products from ERP and imports the unknown ones, updates the known ones and deletes any local
-     * product that is not found at ERP (this may happen if the product was deleted at ERP manually, not thorugh
-     * this app).
+     * Retrieves all products from ERP and imports the unknown ones, updates the known ones.
+     * Does not delete products found locally but not found in the ERP.
      * @return ResponseInterface
      */
     public function import_from_erp(): ResponseInterface
