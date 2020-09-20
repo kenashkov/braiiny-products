@@ -13,6 +13,7 @@ use Guzaba2\Orm\Interfaces\ValidationFailedExceptionInterface;
 use GuzabaPlatform\Platform\Application\BaseActiveRecord;
 use Kenashkov\BillyDk\Interfaces\ProductInterface;
 use Kenashkov\BillyDk\Traits\ProductTrait;
+use Kenashkov\ErpApi\Interfaces\ErpInterface;
 
 /**
  * Class Product
@@ -20,15 +21,15 @@ use Kenashkov\BillyDk\Traits\ProductTrait;
  *
  * Overloaded properties based on the database structure:
  * @property int            product_id
- * @property string         product_billy_id
+ * @property string         product_erp_id
  * @property string         product_name
  * @property string|null    product_organization_id FK to organization in the application (not implemented thus always null)
- * @property string         product_billy_organization_id Billy specific FK
+ * @property string         product_erp_organization_id Billy specific FK
  * @property string         product_description
- * @property string         product_billy_account_id Billy specific FK
+ * @property string         product_erp_account_id Billy specific FK
  * @property string         product_number
  * @property string         product_suppliers_number
- * @property string         product_billy_sales_tax_ruleset_id
+ * @property string         product_erp_sales_tax_ruleset_id
  * @property bool           product_is_archived
  */
 class Product extends BaseActiveRecord implements ProductInterface
@@ -40,12 +41,12 @@ class Product extends BaseActiveRecord implements ProductInterface
         'route'                                 => '/admin/products',//this will use the ActiveRecordDefaultController for the CRUD operations
         //no dedicated controller is provided but thew generic one form Guzaba 2 is used
 
-        'default_billy_organization_id'         => 'cwNMzNn1TOWhrYwyb6jdfA',//to be used if none is provided
-        'default_billy_account_id'              => '4qAjMzZRRoO7sOAjzkorjw',
-        'default_billy_sales_tax_ruleset_id'    => 'K5A89XDhQJeiyC9HtTX6Hw',
+        'default_erp_organization_id'           => 'cwNMzNn1TOWhrYwyb6jdfA',//to be used if none is provided
+        'default_erp_account_id'                => '4qAjMzZRRoO7sOAjzkorjw',
+        'default_erp_sales_tax_ruleset_id'      => 'K5A89XDhQJeiyC9HtTX6Hw',
 
         'services'                              => [ //from the DI
-            'Billy',
+            'Erp',
             'LockManager',
         ],
         'validation'                            => [
@@ -99,24 +100,24 @@ class Product extends BaseActiveRecord implements ProductInterface
     protected function _before_write(): void
     {
         //set some defaults if not set
-        if (!$this->product_billy_organization_id) {
-            $this->product_billy_organization_id = self::CONFIG_RUNTIME['default_billy_organization_id'];
+        if (!$this->product_erp_organization_id) {
+            $this->product_erp_organization_id = self::CONFIG_RUNTIME['default_erp_organization_id'];
         }
-        if (!$this->product_billy_account_id) {
-            $this->product_billy_account_id = self::CONFIG_RUNTIME['default_billy_account_id'];
+        if (!$this->product_erp_account_id) {
+            $this->product_erp_account_id = self::CONFIG_RUNTIME['default_erp_account_id'];
         }
-        if (!$this->product_billy_sales_tax_ruleset_id) {
-            $this->product_billy_sales_tax_ruleset_id = self::CONFIG_RUNTIME['default_billy_sales_tax_ruleset_id'];
+        if (!$this->product_erp_sales_tax_ruleset_id) {
+            $this->product_erp_sales_tax_ruleset_id = self::CONFIG_RUNTIME['default_erp_sales_tax_ruleset_id'];
         }
 
         $this->validate();//means there is no other product with the same name meaning that the transaction is expected to succeed (we already have a lock)
 
-        /** @var BillyDk $Billy */
-        $Billy = self::get_service('Billy');
+        /** @var ErpInterface $Erp */
+        $Erp = self::get_service('Erp');
         //if the below line does not throw an exception the product creation will continue
-        $Response = $Billy->update_product($this);
+        $erp_id = $Erp->update_product($this);
         if ($this->is_new()) {
-            $this->product_billy_id = $Response->products[0]->id;
+            $this->product_erp_id = $erp_id;
         }
     }
 
@@ -125,16 +126,16 @@ class Product extends BaseActiveRecord implements ProductInterface
 
         //TODO - validation of forreign keys pointing to this object are to be added here
         //first all such objects should be removed (or their FK keys changed) and only when it is ensured
-        //that the deletion can complete successfully in the local DB delete at Billy
+        //that the deletion can complete successfully in the local DB delete at ERP
         //and then delete in the local DB
         //it is important to note that delete() invokes _before_delete() and _after_delete() and all these are in a
-        //transaction, meaning that if the deletion at Billy fails the transaction will be rolled back and none of
+        //transaction, meaning that if the deletion at ERP fails the transaction will be rolled back and none of
         //the objects with FK to this one will be actually deleted (or updated)
 
-        /** @var BillyDk $Billy */
-        $Billy = self::get_service('Billy');
+        /** @var ErpInterface $Erp */
+        $Erp = self::get_service('Erp');
         //if the below line does not throw an exception the product deletion will continue
-        $Response = $Billy->delete_product($this);
+        $Erp->delete_product($this);
     }
 
     /**
@@ -145,7 +146,7 @@ class Product extends BaseActiveRecord implements ProductInterface
      * 3. parent::write()
      * 4. $this->_before_write()
      * 5. validate()
-     * 6. update_product() to Billy API
+     * 6. update_product() to ERP API
      * 7. the actual writing in DB occurs in parnet::write()
      * 8. _after_write() (not used)
      * 9. release lock (implicitly at the end of scope of $this->write())
@@ -154,9 +155,9 @@ class Product extends BaseActiveRecord implements ProductInterface
      */
     public function write(): ActiveRecordInterface
     {
-        //to guarantee that there is no record inserted between the validate() and the creation of the product at Billy (@see _before_write())
+        //to guarantee that there is no record inserted between the validate() and the creation of the product at ERP (@see _before_write())
         //locking can be added here
-        //otherwise it may happen the product to be added at Billy but to fail to be added here because there is already one with the same name (race condition)
+        //otherwise it may happen the product to be added at ERP but to fail to be added here because there is already one with the same name (race condition)
         /** @var LockManagerInterface $LockManager */
         $LockManager = self::get_service('LockManager');
         //the acquire_lock method injects in the parent scope (by ref) a ScopeReference instance
@@ -177,48 +178,48 @@ class Product extends BaseActiveRecord implements ProductInterface
      * @implements ProductInterface
      * @return string
      */
-    public function get_billy_id(): string
+    public function get_erp_id(): string
     {
-       return $this->product_billy_id;
+       return $this->product_erp_id;
     }
 
 
-    public function get_billy_organization(): string
+    public function get_erp_organization(): string
     {
-        return $this->product_billy_organization_id;
+        return $this->product_erp_organization_id;
     }
 
-    public function get_billy_name(): string
+    public function get_erp_name(): string
     {
         return $this->product_name;
     }
 
-    public function get_billy_description(): string
+    public function get_erp_description(): string
     {
         return $this->product_description;
     }
 
-    public function get_billy_account(): string
+    public function get_erp_account(): string
     {
-        return $this->product_billy_account_id;
+        return $this->product_erp_account_id;
     }
 
-    public function get_billy_product_number(): string
+    public function get_erp_product_number(): string
     {
         return $this->product_number;
     }
 
-    public function get_billy_suppliers_product_number(): string
+    public function get_erp_suppliers_product_number(): string
     {
         return $this->product_suppliers_number;
     }
 
-    public function get_billy_sales_tax_ruleset(): string
+    public function get_erp_sales_tax_ruleset(): string
     {
-        return $this->product_billy_sales_tax_ruleset_id;
+        return $this->product_erp_sales_tax_ruleset_id;
     }
 
-    public function get_billy_is_archived(): bool
+    public function get_erp_is_archived(): bool
     {
         return (bool) $this->product_is_archived;
     }
