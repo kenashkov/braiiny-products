@@ -51,7 +51,7 @@ class Products extends BaseController
 
         $struct = [
             'imported_products' => $imported_products,
-            'message'           => sprintf(t::_('%1$s products were imported from the ERP.'), $imported_products),
+            'message'           => sprintf(t::_('%1$s products were imported from the ERP.'), count($imported_products)),
         ];
         return self::get_structured_ok_response($struct);
     }

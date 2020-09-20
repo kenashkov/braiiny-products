@@ -203,6 +203,11 @@ class Product extends BaseActiveRecord implements ProductInterface
         if ($this->is_erp_integration_enabled()) {
             /** @var ErpInterface $Erp */
             $Erp = self::get_service(ErpInterface::class);
+
+            //no need to check does the product exist at the ERP (it may have been deleted there)
+            //because the deletes are idempotent - multiple deletes will still return 200 OK
+            //@see https://www.billy.dk/api/ -> Deleting a record
+
             //if the below line does not throw an exception the product deletion will continue
             $Erp->delete_product($this);
         }

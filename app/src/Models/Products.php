@@ -24,16 +24,16 @@ class Products extends Base
     /**
      * Retrieves all products from ERP and imports them locally
      * The import is done in batches (pages), not in one go.
-     * @return array
+     * @return array The uuids of the imported products
      */
-    public static function import_from_erp(): int
+    public static function import_from_erp(): array
     {
         /** @var ErpInterface $Erp */
         $Erp = self::get_service(ErpInterface::class);
         $page = 1;
         $page_size = self::CONFIG_RUNTIME['import_batch_size'];
 
-        $imported_products = 0;
+        $imported_products = [];
         do {
             $erp_products = $Erp->get_products($page, $page_size);
             $page++;
@@ -63,7 +63,7 @@ class Products extends Base
                     //...
                     $Product->write();
                     $Product->enable_erp_integration();
-                    $imported_products++;
+                    $imported_products[] = $Product->get_uuid();
                 } //the permissions are not enforced in this app
             }
             if (count($erp_products) < $page_size) {
