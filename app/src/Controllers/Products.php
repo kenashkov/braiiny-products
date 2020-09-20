@@ -16,11 +16,11 @@ class Products extends BaseController
 
     protected const CONFIG_DEFAULTS = [
         'routes'        => [
-            '/admin/products/push-to-billy'     => [
-                Method::HTTP_POST                   => [self::class, 'push_to_billy']
+            '/admin/products/export-to-erp'       => [
+                Method::HTTP_POST                       => [self::class, 'export_to_erp']
             ],
-            '/admin/products/get-from-billy'    => [
-                Method::HTTP_POST                   => [self::class, 'get_from_billy']
+            '/admin/products/import-from-erp'     => [
+                Method::HTTP_GET                       => [self::class, 'import_from_erp']
             ],
         ]
     ];
@@ -28,26 +28,26 @@ class Products extends BaseController
     protected const CONFIG_RUNTIME = [];
 
     /**
-     * Pushes the current products to billy.
-     * Considering that any change in this system is immediately reflected at Billy this method will just delete the
-     * products at Billy that do not exist in this system.
+     * Pushes the current products to ERP.
+     * Considering that any change in this system is immediately reflected at ERP this method will just delete the
+     * products at ERP that do not exist in this system.
      * Since there are currently pre-existing products there this method is not implemented
      * @return ResponseInterface
      */
-    public function push_to_billy(): ResponseInterface
+    public function export_to_erp(): ResponseInterface
     {
-        $message = sprintf(t::_('Pushing to Billy is not implemented as this will delete products at Billy.'));
+        $message = sprintf(t::_('Pushing to ERP is not implemented as this will delete products at ERP.'));
         throw new NotImplementedException($message);
     }
 
     /**
-     * Retrieves all products from billy and imports the unknown ones, updates the known ones and deletes any local
-     * product that is not found at Billy (this may happen if the product was deleted at billy manually, not thorugh
+     * Retrieves all products from ERP and imports the unknown ones, updates the known ones and deletes any local
+     * product that is not found at ERP (this may happen if the product was deleted at ERP manually, not thorugh
      * this app).
      * @return ResponseInterface
      */
-    public function get_from_billy(): ResponseInterface
+    public function import_from_erp(): ResponseInterface
     {
-        //Pro
+        \Kenashkov\Braiiny\Products\Models\Products::import_from_erp();
     }
 }

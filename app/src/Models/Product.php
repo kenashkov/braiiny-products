@@ -46,7 +46,8 @@ class Product extends BaseActiveRecord implements ProductInterface
         'default_erp_sales_tax_ruleset_id'      => 'K5A89XDhQJeiyC9HtTX6Hw',
 
         'services'                              => [ //from the DI
-            'Erp',
+            //'Erp',
+            ErpInterface::class,
             'LockManager',
         ],
         'validation'                            => [
@@ -113,7 +114,7 @@ class Product extends BaseActiveRecord implements ProductInterface
         $this->validate();//means there is no other product with the same name meaning that the transaction is expected to succeed (we already have a lock)
 
         /** @var ErpInterface $Erp */
-        $Erp = self::get_service('Erp');
+        $Erp = self::get_service(ErpInterface::class);
         //if the below line does not throw an exception the product creation will continue
         $erp_id = $Erp->update_product($this);
         if ($this->is_new()) {
@@ -133,7 +134,7 @@ class Product extends BaseActiveRecord implements ProductInterface
         //the objects with FK to this one will be actually deleted (or updated)
 
         /** @var ErpInterface $Erp */
-        $Erp = self::get_service('Erp');
+        $Erp = self::get_service(ErpInterface::class);
         //if the below line does not throw an exception the product deletion will continue
         $Erp->delete_product($this);
     }
